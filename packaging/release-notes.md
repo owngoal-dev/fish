@@ -19,8 +19,8 @@ User configuration lives in `~/.config/fish`. Each package compiles its bootstra
 
 ## About this build
 
-Upstream [`fish-shell/fish-shell@@UPSTREAM_SHORT@`](https://github.com/fish-shell/fish-shell/commit/@UPSTREAM_REF@), plus the single-purpose iOS forkless patches in [`patches/`](https://github.com/OwnGoalStudio/fish/tree/@TAG@/patches). PCRE2 is linked statically; RootHide adds its bootstrap-provided `libvrootapi` dependency.
+Upstream [`fish-shell/fish-shell@@UPSTREAM_SHORT@`](https://github.com/fish-shell/fish-shell/commit/@UPSTREAM_REF@), plus the single-purpose iOS forkless patches in [`patches/`](https://github.com/owngoal-dev/fish/tree/@TAG@/patches). PCRE2 is linked statically; RootHide adds its bootstrap-provided `libvrootapi` dependency.
 
 Verify downloads against `SHA256SUMS`.
 
-**Full changelog**: https://github.com/OwnGoalStudio/fish/commits/@TAG@
+**Full changelog**: https://github.com/owngoal-dev/fish/commits/@TAG@
