@@ -1,0 +1,66 @@
+diff --git a/src/print_help.rs b/src/print_help.rs
+--- a/src/print_help.rs
++++ b/src/print_help.rs
+@@ -4,6 +4,8 @@
+ use crate::prelude::*;
+ 
+ use std::ffi::{OsStr, OsString};
++#[cfg(target_os = "ios")]
++use std::os::unix::process::CommandExt;
+ use std::process::Command;
+ 
+ const HELP_ERR: LocalizableString = localizable_string!("Could not show help message");
+@@ -13,11 +15,17 @@ pub fn print_help(command: &str) {
+     cmdline.push("__fish_print_help ");
+     cmdline.push(command);
+ 
+-    match Command::new("fish")
+-        .args([OsStr::new("-c"), &cmdline])
+-        .spawn()
+-        .and_then(|mut c| c.wait())
++    let mut fish = Command::new("fish");
++    fish.args([OsStr::new("-c"), &cmdline]);
++
++    #[cfg(target_os = "ios")]
+     {
++        let error = fish.exec();
++        eprintf!("%s: %s\n", wgettext!(HELP_ERR), error);
++    }
++
++    #[cfg(not(target_os = "ios"))]
++    match fish.spawn().and_then(|mut c| c.wait()) {
+         Ok(status) if !status.success() => eprintf!("%s\n", wgettext!(HELP_ERR)),
+         Err(e) => eprintf!("%s: %s\n", wgettext!(HELP_ERR), e),
+         _ => (),
+diff --git a/src/threads/threads.rs b/src/threads/threads.rs
+--- a/src/threads/threads.rs
++++ b/src/threads/threads.rs
+@@ -1,5 +1,6 @@
+ //! Support for thread pools and thread management.
+ use crate::flog::{FloggableDebug, flog};
++#[cfg(not(target_os = "ios"))]
+ use nix::errno::Errno;
+ use nix::sys::signal::{SigSet, SigmaskHow, Signal};
+ use std::marker::PhantomData;
+@@ -34,12 +35,15 @@ pub fn init() {
+         .map_err(|_| ())
+         .expect("threads::init() must only be called once (at startup)!");
+ 
+-    extern "C" fn child_post_fork() {
+-        IS_FORKED_PROC.store(true, Ordering::Relaxed);
+-    }
+-    unsafe {
+-        let result = libc::pthread_atfork(None, None, Some(child_post_fork));
+-        assert_eq!(result, 0, "pthread_atfork() failure: {}", Errno::last());
++    #[cfg(not(target_os = "ios"))]
++    {
++        extern "C" fn child_post_fork() {
++            IS_FORKED_PROC.store(true, Ordering::Relaxed);
++        }
++        unsafe {
++            let result = libc::pthread_atfork(None, None, Some(child_post_fork));
++            assert_eq!(result, 0, "pthread_atfork() failure: {}", Errno::last());
++        }
+     }
+ }
+ 

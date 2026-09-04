@@ -1,0 +1,57 @@
+diff --git a/build.rs b/build.rs
+--- a/build.rs
++++ b/build.rs
+@@ -15,12 +15,19 @@ fn main() {
+     // Add our default to enable tools that don't go through CMake, like "cargo test" and the
+     // language server.
+ 
+-    rsconf::set_env_value(
+-        "FISH_RESOLVED_BUILD_DIR",
++    let resolved_build_dir = if target_os() == "ios" {
++        "/build".to_owned()
++    } else {
+         // If set by CMake, this might include symlinks. Since we want to compare this to the
+         // dir fish is executed in we need to canonicalize it.
+-        fish_build_dir().canonicalize().unwrap().to_str().unwrap(),
+-    );
++        fish_build_dir()
++            .canonicalize()
++            .unwrap()
++            .to_str()
++            .unwrap()
++            .to_owned()
++    };
++    rsconf::set_env_value("FISH_RESOLVED_BUILD_DIR", &resolved_build_dir);
+ 
+     // We need to canonicalize (i.e. realpath) the manifest dir because we want to be able to
+     // compare it directly as a string at runtime.
+@@ -37,7 +44,12 @@ fn main() {
+     // Per https://doc.rust-lang.org/cargo/reference/build-scripts.html#inputs-to-the-build-script,
+     // the source directory is the current working directory of the build script
+-    rsconf::set_env_value("FISH_BUILD_VERSION", &get_version());
++    let build_version = if target_os() == "ios" {
++        env_var("CARGO_PKG_VERSION").unwrap()
++    } else {
++        get_version()
++    };
++    rsconf::set_env_value("FISH_BUILD_VERSION", &build_version);
+ 
+     fish_build_helper::rebuild_if_embedded_path_changed("share");
+ 
+     let build = cc::Build::new();
+diff --git a/crates/build-helper/src/lib.rs b/crates/build-helper/src/lib.rs
+--- a/crates/build-helper/src/lib.rs
++++ b/crates/build-helper/src/lib.rs
+@@ -18,7 +18,12 @@ pub fn env_var(name: &str) -> Option<String> {
+ }
+ 
+ pub fn workspace_root() -> &'static Path {
++    #[cfg(target_os = "ios")]
++    return Path::new("/src");
++
++    #[cfg(not(target_os = "ios"))]
+     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
++    #[cfg(not(target_os = "ios"))]
+     manifest_dir.ancestors().nth(2).unwrap()
+ }
+ 

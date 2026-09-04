@@ -1,0 +1,56 @@
+diff --git a/src/exec.rs b/src/exec.rs
+--- a/src/exec.rs
++++ b/src/exec.rs
+@@ -192,6 +192,10 @@ pub fn exec_job(parser: &mut Parser, job: &Job, block_io: IoChain) -> bool {
+         // Transfer tty?
+         if p.leads_pgrp && job.group().wants_terminal() {
+             handoff.to_job_group(job.group.as_ref().unwrap());
++            #[cfg(target_os = "ios")]
++            if let Some(pid) = p.pid() {
++                let _ = unsafe { libc::kill(pid.as_pid_t(), libc::SIGCONT) };
++            }
+         }
+     }
+     drop(pipe_next_read);
+diff --git a/src/fork_exec/spawn.rs b/src/fork_exec/spawn.rs
+--- a/src/fork_exec/spawn.rs
++++ b/src/fork_exec/spawn.rs
+@@ -82,6 +82,17 @@ fn add_dup2(&mut self, src: libc::c_int, target: libc::c_int) -> Result<(), Errn
+             ))
+         }
+     }
++
++    #[cfg(target_os = "ios")]
++    fn add_inherit(&mut self, fd: libc::c_int) -> Result<(), Errno> {
++        unsafe extern "C" {
++            fn posix_spawn_file_actions_addinherit_np(
++                actions: *mut posix_spawn_file_actions_t,
++                fd: libc::c_int,
++            ) -> libc::c_int;
++        }
++        unsafe { check_fail(posix_spawn_file_actions_addinherit_np(&mut self.0, fd)) }
++    }
+ }
+ 
+ impl Drop for FileActions {
+@@ -122,6 +133,10 @@ pub fn new(
+         if desired_pgid.is_some() {
+             flags |= libc::POSIX_SPAWN_SETPGROUP;
+         }
++        #[cfg(target_os = "ios")]
++        if matches!(pgroup_policy, PgroupPolicy::Lead) && j.group().wants_terminal() {
++            flags |= libc::POSIX_SPAWN_START_SUSPENDED;
++        }
+         attr.set_flags(flags.try_into().expect("Flags should fit in c_short"))?;
+ 
+         if let Some(desired_pgid) = desired_pgid {
+@@ -142,6 +157,9 @@ pub fn new(
+         for act in dup2s.get_actions() {
+             if act.target < 0 {
+                 actions.add_close(act.src)?;
++            } else if cfg!(target_os = "ios") && act.src == act.target {
++                #[cfg(target_os = "ios")]
++                actions.add_inherit(act.src)?;
+             } else {
+                 actions.add_dup2(act.src, act.target)?;
+             }

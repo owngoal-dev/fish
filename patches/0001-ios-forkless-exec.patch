@@ -1,0 +1,128 @@
+diff --git a/src/exec.rs b/src/exec.rs
+--- a/src/exec.rs
++++ b/src/exec.rs
+@@ -14,14 +14,13 @@
+     BorrowedFdFile, PIPE_ERROR, make_autoclose_pipes, make_fd_blocking, open_cloexec,
+ };
+ use crate::flog::{flog, flogf};
++#[cfg(not(target_os = "ios"))]
++use crate::fork_exec::postfork::report_setpgid_error;
+ #[cfg(have_posix_spawn)]
+ use crate::fork_exec::spawn::PosixSpawner;
+ use crate::fork_exec::{
+     PATH_BSHELL, blocked_signals_for_job,
+-    postfork::{
+-        child_setup_process, execute_fork, execute_setpgid, report_setpgid_error,
+-        signal_safe_report_exec_error,
+-    },
++    postfork::{child_setup_process, execute_setpgid, signal_safe_report_exec_error},
+ };
+ use crate::function::{self, FunctionProperties};
+ use crate::io::{
+@@ -48,18 +47,16 @@
+ use libc::{
+     EXIT_FAILURE, EXIT_SUCCESS, SIGINT, SIGQUIT, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO,
+ };
+-use nix::{
+-    errno::Errno,
+-    fcntl::OFlag,
+-    sys::stat,
+-    unistd::{getpgrp, getpid},
+-};
++#[cfg(not(target_os = "ios"))]
++use nix::unistd::{getpgrp, getpid};
++use nix::{errno::Errno, fcntl::OFlag, sys::stat};
++#[cfg(not(target_os = "ios"))]
++use std::num::NonZeroU32;
+ use std::sync::LazyLock;
+ use std::{
+     ffi::CStr,
+     io::{Read as _, Write as _},
+     mem::MaybeUninit,
+-    num::NonZeroU32,
+     os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd, RawFd},
+     slice,
+     sync::{
+@@ -457,6 +454,9 @@ fn launch_process_nofork(vars: &EnvStack, p: &Process) -> ! {
+ // we use fork(), we can call tcsetpgrp after the fork, before the exec, and avoid the race).
+ #[cfg(have_posix_spawn)]
+ fn can_use_posix_spawn_for_job(job: &Job, dup2s: &Dup2List) -> bool {
++    if cfg!(target_os = "ios") {
++        return true;
++    }
+     // Is it globally disabled?
+     if !use_posix_spawn() {
+         return false;
+@@ -689,6 +689,7 @@ pub enum PgroupPolicy {
+ 
+ /// Call fork() as part of executing a process in a job. Set up process groups.
+ /// Execute `child_action` in the context of the child.
++#[cfg(not(target_os = "ios"))]
+ fn fork_child_for_process(
+     job: &Job,
+     p: &Process,
+@@ -723,7 +724,7 @@ fn fork_child_for_process(
+     let job_id = job.job_id().as_num();
+ 
+     // Time to fork.
+-    let fork_res = execute_fork();
++    let fork_res = crate::fork_exec::postfork::execute_fork();
+     if fork_res < 0 {
+         return Err(());
+     }
+@@ -933,6 +934,10 @@ fn exec_external_command(
+         return Ok(());
+     }
+ 
++    #[cfg(target_os = "ios")]
++    unreachable!("iOS always uses posix_spawn");
++
++    #[cfg(not(target_os = "ios"))]
+     fork_child_for_process(j, p, &dup2s, pgroup_policy, |p| {
+         signal_safe_launch_process(p, &actual_cmd, &argv, &envv)
+     })
+diff --git a/src/fork_exec/postfork.rs b/src/fork_exec/postfork.rs
+--- a/src/fork_exec/postfork.rs
++++ b/src/fork_exec/postfork.rs
+@@ -7,19 +7,24 @@
+ use crate::signal::signal_reset_handlers;
+ use crate::wutil::fstat;
+ use fish_common::exit_without_destructors;
+-use libc::{O_RDONLY, pid_t};
++use libc::O_RDONLY;
++#[cfg(not(target_os = "ios"))]
++use libc::pid_t;
+ use nix::errno::Errno;
+ use nix::unistd::getpid;
+ use std::ffi::CStr;
+ use std::num::NonZeroU32;
+ use std::os::fd::{AsRawFd as _, BorrowedFd};
+ use std::os::unix::fs::MetadataExt as _;
++#[cfg(not(target_os = "ios"))]
+ use std::time::Duration;
+ 
+ /// The number of times to try to call fork() before giving up.
++#[cfg(not(target_os = "ios"))]
+ const FORK_LAPS: usize = 5;
+ 
+ /// The number of nanoseconds to sleep between attempts to call fork().
++#[cfg(not(target_os = "ios"))]
+ const FORK_SLEEP_TIME: Duration = Duration::from_nanos(1000000);
+ 
+ /// Clear FD_CLOEXEC on a file descriptor.
+@@ -39,6 +44,7 @@ fn clear_cloexec(fd: i32) -> i32 {
+ }
+ 
+ /// Report the error code for a failed setpgid call.
++#[cfg(not(target_os = "ios"))]
+ pub(crate) fn report_setpgid_error(
+     err: Errno,
+     is_parent: bool,
+@@ -192,6 +198,7 @@ pub fn child_setup_process(
+ /// This function is a wrapper around fork. If the fork calls fails with EAGAIN, it is retried
+ /// FORK_LAPS times, with a very slight delay between each lap. If fork fails even then, the process
+ /// will exit with an error message.
++#[cfg(not(target_os = "ios"))]
+ pub fn execute_fork() -> pid_t {
+     let mut i = 0;
+     let err = loop {
