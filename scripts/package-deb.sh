@@ -30,9 +30,7 @@ package_id="${PACKAGE_ID:-wiki.qaq.fish}"
 control_template="$repository_root/packaging/DEBIAN/control"
 entitlements="$repository_root/packaging/${PROGRAM}.entitlements"
 
-for input in "$control_template" "$entitlements" \
-    "$repository_root/packaging/DEBIAN/postinst" \
-    "$repository_root/packaging/DEBIAN/postrm"; do
+for input in "$control_template" "$entitlements"; do
     [[ -f "$input" ]] || { echo "error: missing packaging input: $input" >&2; exit 66; }
 done
 
@@ -137,8 +135,6 @@ require_true com.apple.private.security.storage.AppDataContainers
 
 installed_size="$(du -sk "$installed_root" | awk '{print $1}')"
 upstream_label="${UPSTREAM_REPO##*/}@${UPSTREAM_REF:0:12}"
-bootstrap_dependency=""
-$is_roothide && bootstrap_dependency=", roothide"
 sed \
     -e "s|@PACKAGE_ID@|$package_id|g" \
     -e "s|@VERSION@|$version|g" \
@@ -146,15 +142,8 @@ sed \
     -e "s|@INSTALLED_SIZE@|$installed_size|g" \
     -e "s|@MIN_IOS@|$MIN_IOS|g" \
     -e "s|@UPSTREAM@|$upstream_label|g" \
-    -e "s|@BOOTSTRAP_DEPENDENCY@|$bootstrap_dependency|g" \
     "$control_template" >"$debian/control"
 chmod 0644 "$debian/control"
-
-for maintainer_script in postinst postrm; do
-    sed "s|@PREFIX@|$install_prefix|g" \
-        "$repository_root/packaging/DEBIAN/$maintainer_script" >"$debian/$maintainer_script"
-    chmod 0755 "$debian/$maintainer_script"
-done
 if grep -q '@[A-Z_]*@' "$debian/control"; then
     echo "error: control still holds unsubstituted placeholders:" >&2
     grep -n '@[A-Z_]*@' "$debian/control" | sed 's/^/       /' >&2
@@ -166,20 +155,6 @@ dpkg-deb --root-owner-group -Zzstd -b "$staging" "$temporary_deb" >/dev/null
 [[ "$(dpkg-deb -f "$temporary_deb" Package)" == "$package_id" ]]
 [[ "$(dpkg-deb -f "$temporary_deb" Version)" == "$version" ]]
 [[ "$(dpkg-deb -f "$temporary_deb" Architecture)" == "$architecture" ]]
-for dependency in coreutils sed awk debianutils; do
-    dpkg-deb -f "$temporary_deb" Depends | grep -Eq "(^|, )$dependency([ ,]|$)" || {
-        echo "error: package is missing dependency $dependency" >&2
-        exit 65
-    }
-done
-dpkg-deb --ctrl-tarfile "$temporary_deb" | tar -tf - | grep -qx './postinst' || {
-    echo "error: package has no postinst" >&2
-    exit 65
-}
-dpkg-deb --ctrl-tarfile "$temporary_deb" | tar -tf - | grep -qx './postrm' || {
-    echo "error: package has no postrm" >&2
-    exit 65
-}
 contents="$(dpkg-deb --contents "$temporary_deb")"
 for path in \
     "$install_prefix/usr/bin/$PROGRAM" \

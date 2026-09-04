@@ -13,8 +13,7 @@ Maintainer: OwnGoal Studio <not-gonna-reply@owngoal.dev>
 Author: fish-shell contributors <https://fishshell.com>
 Section: Terminal_Support
 Priority: optional
-Depends: firmware (>= @MIN_IOS@), coreutils, sed, awk, debianutils@BOOTSTRAP_DEPENDENCY@
-Recommends: findutils
+Depends: firmware (>= @MIN_IOS@)
 Conflicts: fish
 Replaces: fish
 Provides: fish

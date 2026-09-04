@@ -29,6 +29,11 @@ layout.
 - Run `symredirect` before signing the RootHide binary and prove its
   `libvrootapi` load command exists. Prove the rootless binary lacks it.
 - `configuration/version.txt` is the only package-version source.
+- Patched source is intentionally dirty. iOS builds must derive
+  `FISH_BUILD_VERSION` from Cargo's package version, not `git describe`, and
+  device tests must require an exact clean `fish --version`.
+- Because `wiki.qaq.fish` owns the same paths as the bootstrap's `fish`
+  package, keep `Conflicts`, `Replaces`, and `Provides: fish` together.
 - `CLAUDE.md` must remain a symlink to `AGENTS.md`.
 - Test by installing a package, never by copying the binary to `/var/mobile`.
 - Before any push or release, read the diff, staged package tree, and binary
