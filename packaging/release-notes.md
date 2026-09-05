@@ -26,3 +26,9 @@ Upstream [`fish-shell/fish-shell@@UPSTREAM_SHORT@`](https://github.com/fish-shel
 Verify downloads against `SHA256SUMS`.
 
 **Full changelog**: https://github.com/owngoal-dev/fish/commits/@TAG@
+
+This packaging revision updates RootHide compatibility checks and signing.
+CLI startup passes bootstrap paths to payloads that use the physical filesystem;
+RootHide virtual-filesystem utilities retain their official import rewriting.
+RootHide device validation is pending; a successful build is not a claim that
+all interactive runtime paths have been tested.

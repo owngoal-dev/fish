@@ -105,7 +105,8 @@ else
         exit 65
     fi
 fi
-if nm -m "$installed_binary" | grep -Eq 'external _(fork|vfork|pthread_atfork)( |$)'; then
+process_symbols="$(nm -m "$installed_binary")"
+if grep -Eq 'external _(fork|vfork|pthread_atfork)( |$)' <<<"$process_symbols"; then
     echo "error: packaged binary imports a fork runtime symbol" >&2
     exit 65
 fi

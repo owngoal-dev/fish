@@ -91,12 +91,13 @@ while read -r dependency; do
 done < <(otool -L "$executable" | tail -n +2 | awk '{print $1}')
 
 # The iOS build must not retain a fork path, even through Rust's process helpers.
-if nm -m "$executable" | grep -Eq 'external _(fork|vfork|pthread_atfork)( |$)'; then
+process_symbols="$(nm -m "$executable")"
+if grep -Eq 'external _(fork|vfork|pthread_atfork)( |$)' <<<"$process_symbols"; then
     echo "error: $executable still imports a fork runtime symbol" >&2
-    nm -m "$executable" | grep -E 'external _(fork|vfork|pthread_atfork)( |$)' >&2
+    grep -E 'external _(fork|vfork|pthread_atfork)( |$)' <<<"$process_symbols" >&2
     exit 65
 fi
-nm -m "$executable" | grep -qE 'external _posix_spawn( |$)' || {
+grep -qE 'external _posix_spawn( |$)' <<<"$process_symbols" || {
     echo "error: $executable does not import posix_spawn" >&2
     exit 65
 }
