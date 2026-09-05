@@ -15,9 +15,8 @@ through `libvrootapi`. Check a device with `dpkg --print-architecture`. See
 [RootHide's filesystem model](https://github.com/RootHide/Developer/blob/main/roothide.md).
 
 This packaging repository keeps no fish source. Every day it checks the newest
-stable fish release, pins its full upstream commit, applies the three
-fork/job-control patches plus one reproducible-path patch, and publishes both
-packages through GitHub Actions.
+stable fish release, pins its full upstream commit, applies the iOS patches,
+and publishes both packages through GitHub Actions.
 
 ```sh
 make check

@@ -112,10 +112,11 @@ on_device "command -v $PROGRAM" || {
 }
 
 echo "==> $PROGRAM --version"
-on_device "$PROGRAM --version" || {
-    echo "error: --version failed on device" >&2
+binary_version="$(on_device "$PROGRAM --version")"
+if [[ "$binary_version" != "$PROGRAM, version ${package_version_expected%%-*}" ]]; then
+    echo "error: unexpected version: $binary_version" >&2
     exit 65
-}
+fi
 on_device "fish_indent --version" || {
     echo "error: fish_indent --version failed on device" >&2
     exit 65
@@ -130,6 +131,13 @@ on_device "$PROGRAM -c 'test \"\$__fish_data_dir\" = \"$prefix/usr/share/fish\";
 echo "==> builtins and external spawn"
 on_device "$PROGRAM -c 'builtin cd /; pwd; echo fish-ok; command ls / >/dev/null'" || {
     echo "error: builtin or external command smoke test failed" >&2
+    exit 65
+}
+
+echo "==> executable scripts"
+script=/tmp/fish-script-smoke
+on_device "set -e; trap 'rm -f $script' EXIT; printf '%s\\n' '#!$prefix/bin/sh -e' 'echo fish-script-ok' >$script; chmod 0755 $script; $PROGRAM -c 'command $script | string match -q fish-script-ok'; $PROGRAM -c 'exec $script' >/dev/null; chmod 4755 $script; if $PROGRAM -c 'command $script' >/dev/null 2>&1; then exit 1; fi" || {
+    echo "error: executable script smoke test failed" >&2
     exit 65
 }
 

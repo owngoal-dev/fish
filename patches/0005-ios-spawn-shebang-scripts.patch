@@ -1,0 +1,205 @@
+diff --git a/src/exec.rs b/src/exec.rs
+--- a/src/exec.rs
++++ b/src/exec.rs
+@@ -64,6 +64,11 @@ use std::{
+         atomic::{AtomicUsize, Ordering},
+     },
+ };
++#[cfg(target_os = "ios")]
++use std::{
++    ffi::CString,
++    os::unix::{ffi::OsStrExt as _, fs::MetadataExt as _},
++};
+ 
+ /// The singleton shared exec thread pool.
+ /// This is used to write the output of internal processes (e.g. builtins)
+@@ -361,6 +366,44 @@ fn is_thompson_shell_payload(p: &[u8]) -> bool {
+     false
+ }
+ 
++#[cfg(target_os = "ios")]
++pub(crate) fn shebang_interpreter(path: &CStr) -> Option<(CString, Option<CString>)> {
++    if unsafe { libc::access(path.as_ptr(), libc::X_OK) } != 0 {
++        return None;
++    }
++
++    let mut file = std::fs::File::open(std::ffi::OsStr::from_bytes(path.to_bytes())).ok()?;
++    let mode = file.metadata().ok()?.mode();
++    if mode & u32::from(libc::S_ISUID | libc::S_ISGID) != 0 {
++        return None;
++    }
++
++    let mut buf = [0; 256];
++    let len = file.read(&mut buf).ok()?;
++    if !buf[..len].starts_with(b"#!") {
++        return None;
++    }
++    let newline = buf[..len].iter().position(|&byte| byte == b'\n')?;
++    let line = buf[2..newline].trim_ascii();
++    let split = line
++        .iter()
++        .position(|byte| byte.is_ascii_whitespace())
++        .unwrap_or(line.len());
++    let interpreter = &line[..split];
++    if !interpreter.starts_with(b"/") {
++        return None;
++    }
++    let argument = line[split..].trim_ascii();
++    Some((
++        CString::new(interpreter).ok()?,
++        if argument.is_empty() {
++            None
++        } else {
++            Some(CString::new(argument).ok()?)
++        },
++    ))
++}
++
+ /// This function checks the beginning of a file to see if it's safe to
+ /// pass to the system interpreter when execve() returns ENOEXEC.
+ ///
+@@ -402,6 +445,27 @@ fn signal_safe_launch_process(
+     unsafe { libc::execve(actual_cmd.as_ptr(), argv.get(), envv.get()) };
+     let err = Errno::last();
+ 
++    #[cfg(target_os = "ios")]
++    let err = if err == Errno::EPERM {
++        if let Some((interpreter, argument)) = shebang_interpreter(actual_cmd) {
++            let original_argv = unsafe { slice::from_raw_parts(argv.get(), argv.len()) };
++            let mut argv2 = Vec::with_capacity(original_argv.len() + 3);
++            argv2.push(interpreter.as_ptr());
++            if let Some(argument) = &argument {
++                argv2.push(argument.as_ptr());
++            }
++            argv2.push(actual_cmd.as_ptr());
++            argv2.extend_from_slice(&original_argv[1..]);
++            argv2.push(std::ptr::null());
++            unsafe { libc::execve(interpreter.as_ptr(), argv2.as_ptr(), envv.get()) };
++            Errno::last()
++        } else {
++            err
++        }
++    } else {
++        err
++    };
++
+     // The shebang wasn't introduced until UNIX Seventh Edition, so if
+     // the kernel won't run the binary we hand it off to the interpreter
+     // after performing a binary safety check, recommended by POSIX: a
+diff --git a/src/fork_exec/spawn.rs b/src/fork_exec/spawn.rs
+--- a/src/fork_exec/spawn.rs
++++ b/src/fork_exec/spawn.rs
+@@ -3,12 +3,14 @@
+ use super::PATH_BSHELL;
+ use super::blocked_signals_for_job;
+ use crate::exec::{PgroupPolicy, is_thompson_shell_script};
++#[cfg(target_os = "ios")]
++use crate::exec::shebang_interpreter;
+ use crate::proc::Job;
+ use crate::redirection::Dup2List;
+ use crate::signal::SIGNALS_TO_DEFAULT;
+ use libc::{c_char, posix_spawn_file_actions_t, posix_spawnattr_t};
+ use nix::errno::Errno;
+-use std::ffi::{CStr, CString};
++use std::ffi::CStr;
+ use std::mem::MaybeUninit;
+ 
+ // The posix_spawn family of functions is unusual in that it returns errno codes directly in the return value, not via errno.
+@@ -167,6 +169,42 @@ impl PosixSpawner {
+         Ok(PosixSpawner { attr, actions })
+     }
+ 
++    fn spawn_interpreted(
++        &self,
++        interpreter: &CStr,
++        argument: Option<&CStr>,
++        cmd: *const c_char,
++        argv: *const *mut c_char,
++        envp: *const *mut c_char,
++    ) -> Result<libc::pid_t, Errno> {
++        let mut argv2 = vec![interpreter.as_ptr().cast_mut()];
++        if let Some(argument) = argument {
++            argv2.push(argument.as_ptr().cast_mut());
++        }
++        argv2.push(cmd.cast_mut());
++        for i in 1.. {
++            let ptr = unsafe { argv.offset(i).read() };
++            if ptr.is_null() {
++                break;
++            }
++            argv2.push(ptr);
++        }
++        argv2.push(std::ptr::null_mut());
++
++        let mut pid = -1;
++        check_fail(unsafe {
++            libc::posix_spawn(
++                &mut pid,
++                interpreter.as_ptr(),
++                &self.actions.0,
++                &self.attr.0,
++                argv2.as_ptr(),
++                envp,
++            )
++        })?;
++        Ok(pid)
++    }
++
+     // Attempt to spawn a new process.
+     pub(crate) fn spawn(
+         &mut self,
+@@ -183,38 +221,28 @@ impl PosixSpawner {
+         }
+         let spawn_err = spawned.unwrap_err();
+ 
++        #[cfg(target_os = "ios")]
++        if spawn_err == Errno::EPERM {
++            let cmdcstr = unsafe { CStr::from_ptr(cmd) };
++            if let Some((interpreter, argument)) = shebang_interpreter(cmdcstr) {
++                return self.spawn_interpreted(
++                    &interpreter,
++                    argument.as_deref(),
++                    cmd,
++                    argv,
++                    envp,
++                );
++            }
++        }
++
+         // The shebang wasn't introduced until UNIX Seventh Edition, so if
+         // the kernel won't run the binary we hand it off to the interpreter
+         // after performing a binary safety check, recommended by POSIX: a
+         // line needs to exist before the first \0 with a lowercase letter.
+         let cmdcstr = unsafe { CStr::from_ptr(cmd) };
+         if spawn_err == Errno::ENOEXEC && is_thompson_shell_script(cmdcstr) {
+-            // Create a new argv with /bin/sh prepended.
+-            let mut argv2 = vec![PATH_BSHELL.as_ptr().cast_mut().cast()];
+-
+-            // The command to call should use the full path,
+-            // not what we would pass as argv0.
+-            let cmd2: CString = CString::new(cmdcstr.to_bytes()).unwrap();
+-            argv2.push(cmd2.as_ptr().cast_mut());
+-            for i in 1.. {
+-                let ptr = unsafe { argv.offset(i).read() };
+-                if ptr.is_null() {
+-                    break;
+-                }
+-                argv2.push(ptr);
+-            }
+-            argv2.push(std::ptr::null_mut());
+-            check_fail(unsafe {
+-                libc::posix_spawn(
+-                    &mut pid,
+-                    PATH_BSHELL.as_ptr().cast(),
+-                    &self.actions.0,
+-                    &self.attr.0,
+-                    argv2.as_ptr(),
+-                    envp,
+-                )
+-            })?;
+-            return Ok(pid);
++            let shell = CStr::from_bytes_with_nul(PATH_BSHELL).unwrap();
++            return self.spawn_interpreted(shell, None, cmd, argv, envp);
+         }
+         Err(spawn_err)
+     }

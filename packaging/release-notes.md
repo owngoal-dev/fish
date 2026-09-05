@@ -15,6 +15,8 @@ Run `dpkg --print-architecture` if unsure. Requires iOS @MIN_IOS_MAJOR@ or later
 
 Run `fish`. `cd` is a function over the `cd` builtin; `ls` is a function over the external `ls`. Other external commands are launched through `posix_spawn`.
 
+This revision also runs executable shebang scripts through their declared interpreter when iOS rejects direct spawning.
+
 User configuration lives in `~/.config/fish`. Each package compiles its bootstrap's correct `etc/fish` and `usr/share/fish` paths.
 
 ## About this build

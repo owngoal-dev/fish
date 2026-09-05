@@ -53,12 +53,21 @@ needs rebasing:
   standalone help path and removes the unused iOS `pthread_atfork` registration.
 - `0004-ios-reproducible-build-paths.patch` keeps Host build/source paths out of
   the iOS binary while leaving Host-side resource embedding on real paths.
+- `0005-ios-spawn-shebang-scripts.patch` recovers executable shebang scripts from
+  iOS `EPERM` by spawning their declared interpreter without bypassing execute
+  permissions or set-ID rejection.
 
 Keep each downstream patch single-purpose and ordered by dependency. Patch
 application is only a structural check; the final Mach-O symbol gate must also
 prove that no dependency or newly reachable standard-library path restored a
 fork import. Release builds must also remap Cargo and rustup roots and reject
 any remaining Host home, workspace, or temporary path in the final binary.
+
+On iOS, `posix_spawn` and `execve` can return `EPERM` for an otherwise
+executable shebang script. Retry only after a bounded shebang read, preserve
+the optional interpreter argument and original arguments, require execute
+access, and reject set-ID files rather than turning all `EPERM` failures into
+shell execution.
 
 Fish 4.x embeds its standard functions and completions. The build statically
 links PCRE2 and disables translations and generated docs. Do not declare
