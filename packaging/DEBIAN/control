@@ -2,13 +2,12 @@ Package: @PACKAGE_ID@
 Name: fish
 Version: @VERSION@
 Architecture: @ARCHITECTURE@
-Description: forkless fish shell for jailbroken iOS
- The friendly interactive shell, patched to launch external commands with
- posix_spawn instead of fork. One source and patch set builds both roothide
- and rootless packages; the architecture field names the bootstrap layout,
- not the CPU. Upstream is @UPSTREAM@.
- .
- Run `fish` in a terminal. User configuration lives in ~/.config/fish.
+Description: The friendly interactive shell
+ fish suggests the rest of a command as you type it, colours mistakes before you
+ run them, and completes flags from the tool's own help — with nothing to
+ configure first. This build is patched to start commands without fork, which is
+ what makes it work on iOS. Run `fish` in a terminal; your settings live in
+ ~/.config/fish.
 Maintainer: OwnGoal Studio <not-gonna-reply@owngoal.dev>
 Author: fish-shell contributors <https://fishshell.com>
 Section: Terminal_Support
