@@ -1,4 +1,4 @@
-# fish — fish packaged for iOS on custom firmware.
+# fish — fish packaged for jailbroken iOS.
 #
 # Every step is a script under scripts/ so the GitHub Actions workflow and a
 # local checkout run the same code. This makefile only wires them together and
@@ -55,7 +55,7 @@ endif
 all: debs
 
 help:
-	@echo "fish $(PACKAGE_VERSION) — forkless fish for iOS on custom firmware"
+	@echo "fish $(PACKAGE_VERSION) — forkless fish for jailbroken iOS"
 	@echo "upstream: $(UPSTREAM_REPO) @ $(UPSTREAM_REF)"
 	@echo "target:   $(ARCH)-apple-ios$(MIN_IOS)"
 	@echo
