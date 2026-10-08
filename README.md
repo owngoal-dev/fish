@@ -1,11 +1,11 @@
-# fish for jailbroken iOS
+# fish for iOS on custom firmware
 
 Forkless [fish](https://fishshell.com/) for iOS 15+, built for both bootstrap
 layouts from one pinned source and patch set.
 
 | bootstrap | package architecture | package paths | process view |
 | --- | --- | --- | --- |
-| rootless | `iphoneos-arm64` | prefixed with `/var/jb` | jailbreak files remain under `/var/jb` |
+| rootless | `iphoneos-arm64` | prefixed with `/var/jb` | bootstrap files remain under `/var/jb` |
 | roothide | `iphoneos-arm64e` | unprefixed | randomized jbroot is presented as `/`; iOS root is `/rootfs` |
 
 Both packages contain arm64 Mach-O executables; the architecture field selects

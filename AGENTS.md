@@ -1,7 +1,7 @@
 # fish — Agent Notes
 
 [fish](https://fishshell.com/) is packaged as a forkless interactive shell for
-jailbroken iOS 15+, for both roothide and rootless bootstraps.
+iOS 15+ on custom firmware, for both roothide and rootless bootstraps.
 
 This is a packaging repository, not a fork. It fetches a pinned upstream
 commit, applies `patches/`, and cross-compiles one arm64 binary per bootstrap

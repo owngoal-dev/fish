@@ -1,4 +1,4 @@
-[fish](https://fishshell.com/) — the friendly interactive shell — built for jailbroken iOS without a fork execution path.
+[fish](https://fishshell.com/) — the friendly interactive shell — built for iOS on custom firmware, without a fork execution path.
 
 ## Which one do I download?
 
